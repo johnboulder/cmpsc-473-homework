@@ -74,26 +74,76 @@ thread_t* scheduler()
 		case 0:
 			{
 				/* Write your code here*/
-				if(!ready_list)
-				{
-
-				}
 				thread_t *t;
 				t = thread_dequeue(ready_list);
 				thread_enqueue(t, ready_list);
-
-				return t; // Return pointer of the next thread
+			
+				// Return pointer of the next thread
+				return t; 			
 			}
 
-			// Lottery
+		// Lottery
 		case 1:          
 			{
 				/*Write your code here*/
+				thread_node_t *current = ready_list->head;
+				int count = 0;
+				int winner = 0;
+				int totalTickets = 0;
+				thread_t *t;
+				while(current)
+				{
+					totalTickets += current->thread->priority;
+					current = current->next;
+				}
 
-				return NULL;
+				winner = random() % totalTickets;
+				
+				current = ready_list->head;
+				thread_node_t *prev;
+				while(current)
+				{
+					count += current->thread->priority;
+					if(count>winner)
+					{
+						// Found the winner
+						break;
+					}
+					prev = current;
+					current = current->next;
+				}
+
+				if(prev && current)
+				{
+					prev->next = current->next;
+
+					if(!prev->next)
+					{
+						ready_list->tail = prev;
+					}
+
+					--(ready_list->size);
+					t = current->thread;
+					free(current);
+					current = NULL;
+				}
+				else if(!current)
+				{
+					// current is null, which should only happen when the list is empty
+					return NULL;
+				}
+				else
+				{
+					t = thread_dequeue(ready_list);
+				}
+				// Enqueue the thread again to ensure that the it doesn't win every time over 
+				// threads with the same priority
+				thread_enqueue(t, ready_list);
+				return t;
 			}
-		case 2:          //First come first serve
 
+		//First come first served
+		case 2:          
 			return ready_list->head->thread;
 
 		default:
