@@ -75,4 +75,5 @@ int DeleteThread(int thread_id);
 int SuspendThread(int thread_id);
 int ResumeThread(int thread_id);
 int GetStatus(int thread_id, status_t *status);
+thread_t *GetThread(int thread_id);
 unsigned GetCurrentTime();

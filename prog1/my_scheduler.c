@@ -76,7 +76,7 @@ thread_t* scheduler()
 				/* Write your code here*/
 				thread_t *t;
 				t = thread_dequeue(ready_list);
-				thread_enqueue(t, ready_list);
+				//thread_enqueue(t, ready_list);
 			
 				// Return pointer of the next thread
 				return t; 			
@@ -100,7 +100,7 @@ thread_t* scheduler()
 				winner = random() % totalTickets;
 				
 				current = ready_list->head;
-				thread_node_t *prev;
+				thread_node_t *prev = NULL;
 				while(current)
 				{
 					count += current->thread->priority;

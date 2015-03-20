@@ -85,7 +85,6 @@ int CreateThread(void (*f) (void), int priority)
         return -1;
     }
     thread_t *thread = malloc(sizeof(thread_t));
-
     thread->status = malloc(sizeof(status_t));
     thread->stack = malloc(STACK_SIZE);
     thread->status->id = next_thread;
@@ -109,11 +108,10 @@ void InsertWrapper(thread_t *t, thread_queue_t *q)
 {
     if (scheduling_type == 0)
     {
-        thread_enqueue(t, q);
+     thread_enqueue(t, q);
     }
     else
     {
-        //InsertAtHead(t, q);
         return;
     }
 }
@@ -151,7 +149,7 @@ void Dispatch(int sig)
             if (GetCurrentTime() >= node->thread->status->wake_time)
             {
                 printf("wake time\n");
-                InsertWrapper(node->thread, ready_list);
+                thread_enqueue(node->thread, ready_list);
                 node->thread->status->state = READY;
             }
             break;
@@ -244,6 +242,9 @@ int RemoveFromList(int thread_id, thread_queue_t *q)
     thread_node_t *node = q->head;
     thread_node_t *prev_node = NULL;
     // Find node with corresponding thread_id
+    if (!node){
+        return -1;
+    }
     while(node->next != NULL && node->thread->status->id != thread_id)
     {
         prev_node = node;
@@ -272,7 +273,8 @@ int RemoveFromList(int thread_id, thread_queue_t *q)
     {
         prev_node->next = node->next;
     }
-    free(node);
+    //free(node);
+    (q->size) --;
     return 0;
 }
 
@@ -333,6 +335,7 @@ void SleepThread(int sec)
     current->status->state = SLEEPING;
     current->status->wake_time = (GetCurrentTime() + (sec * 1000));
     current->status->total_sleep_time += (sec * 1000);
+    RemoveFromList(current->status->id, ready_list);
     YieldCPU();
 }
 
@@ -406,6 +409,7 @@ void CleanUp()
                "total_sleep_time = %d\ntotal_wait_time = %d\navg_exec_time = %d\navg_wait_time = %d\n", s->no_of_bursts, s->total_exec_time, s->total_sleep_time, s->total_wait_time, s->avg_exec_time, s->avg_wait_time);
         node = node->next;
     }
+    printf("size of ready_list just before cleanup is %d\n", ready_list->size);
     // delete all threads
     // free up readyQ
     node = ready_list->head;
