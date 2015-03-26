@@ -17,10 +17,11 @@
 #include <assert.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <stdio.h>
 
 node_t *head;
 int strat;
-const int BEST_FIT = 0, WORST_FIT = 1;
+const int BEST_FIT = 0, WORST_FIT = 1, MAGIC = 1234567, MIN_SIZE = 16;
 
 void *psumalloc(int size)
 {
@@ -47,7 +48,7 @@ void *psumalloc(int size)
 	return ptr;
 }
 
-void psufree(void* ptr)
+int psufree(void* ptr)
 {
 	// Allocators store a little bit of extra info in the header block which is kept in memory, usually just before the handed out chunk of memory.
 	// Find the header block assuming that the ptr value is at the top of the heap
@@ -57,18 +58,53 @@ void psufree(void* ptr)
 	// Through simple math find the size of the newly freed region
 	// i.e. the size of the header + the size of the region.
 	
-	// 1. Get the virtual address from ptr
-	
+	// 1. Find the header of ptr
 	// 2. Take that virtual address and find the header block
-	// 3. Use the size information contained in the header block to set the size info in a node and place that node in teh same position the header was in
+	// 3. Use the size information contained in the header block to set the size info in a node and place that node in the same position the header was in
 	// 4. Insert it at the head of the free list
 	// 5. Check if we can coelesce
+
+
+	header_t *headPtr = (((header_t*)ptr)-1);
+	
+	// Check that the magic number is valid
+	if(headPtr->magic == MAGIC)
+	{
+		printf("Magic Number Valid \n");
+		int headerSize = headPtr->size;
+		int totalSize = headerSize+sizeof(header_t);
+		// Put a node where ptr used to reside
+		node_t *released = (node_t*) ptr;
+
+		// Set released to a size prorated for node
+		released->size = totalSize-sizeof(node_t);
+
+		// Add released to the free list
+		released->next = head;
+		head = released;
+		return 0;
+	}
+	else
+	{
+		printf("Magic Number Invalid \n");
+		return -1;
+	}
 }
 
 void *bestFit(int size)
 {
 	node_t *current = head->next;
 	node_t *best = head;
+
+	// TODO fix our program such that we don't need to do this.
+	// We do this here because freeing memory requires that we have enough space to place a node_t
+	// in place of the header_t in the memory slot and it's corrupting contiguous parts of memory. 
+	// We can remedy this by ensuring that node_t and header_t are the same size, or by just using
+	// the same struct in place of them both.
+	if(size < MIN_SIZE)
+	{
+		size = MIN_SIZE;
+	}
 	int totalSize = size + sizeof(header_t);
 
 	// While current->next is not NULL
@@ -89,7 +125,7 @@ void *bestFit(int size)
 
 	// There's enough space, split the two
 	if(best->size > totalSize)
-	{	
+	{	// SPLIT THE TWO
 		// Set the head to where best resides
 		header_t *headPtr = (header_t*)best;
 		// Assign a pointer to best's old position
@@ -112,10 +148,21 @@ void *bestFit(int size)
 
 		// Set headPtr's values
 		headPtr->size = totalSize-sizeof(header_t);
-		headPtr->magic = 1234567;
+		headPtr->magic = MAGIC;
 
 		return (headPtr+1);
 	}
+	else if(best->size == totalSize)
+	{
+		best->size-=totalSize;
+		node_t *endBest = best+1;
+		header_t *headPtr = (header_t*)endBest;
+		headPtr->size = totalSize-sizeof(header_t);
+		headPtr->magic = MAGIC;
+
+		return (headPtr+1);
+	}
+
 	return NULL;
 }
 
@@ -152,6 +199,76 @@ void popNode(node_t *node)
 
 void *worstFit(int size)
 {
+	node_t *current = head->next;
+	node_t *worst = head;
+
+	// TODO fix our program such that we don't need to do this.
+	// We do this here because freeing memory requires that we have enough space to place a node_t
+	// in place of the header_t in the memory slot and it's corrupting contiguous parts of memory. 
+	// We can remedy this by ensuring that node_t and header_t are the same size, or by just using
+	// the same struct in place of them both.
+	if(size < MIN_SIZE)
+	{
+		size = MIN_SIZE;
+	}
+	int totalSize = size + sizeof(header_t);
+
+	// While current->next is not NULL
+	while(current)
+	{
+		if(current->size < worst->size && current->size > totalSize)
+		{
+			worst = current;
+		}
+		current = current->next;
+	}
+
+	// Is the size of worst smaller than totalSize? Case where worst==head still
+	if(worst->size < totalSize)
+	{
+		return NULL;
+	}
+
+	// There's enough space, split the two
+	if(worst->size > totalSize)
+	{	// SPLIT THE TWO
+		// Set the head to where worst resides
+		header_t *headPtr = (header_t*)worst;
+		// Assign a pointer to worst's old position
+		void *worstNew = worst;
+		// Use it to find worst's new position
+		worstNew+=totalSize;
+		// Get worst's size value
+		int bsize = worst->size;
+		// Remove worst from the list
+		popNode(worst);
+		// Subtract totalSize from worst's size
+		bsize-=totalSize;
+		// Move worst
+		worst=worstNew;
+		// Set worst's values
+		worst->size = bsize;
+		worst->next = head;
+		// Add worst back into the list
+		head = worst;
+
+		// Set headPtr's values
+		headPtr->size = totalSize-sizeof(header_t);
+		headPtr->magic = MAGIC;
+
+		return (headPtr+1);
+	}
+	else if(worst->size == totalSize)
+	{
+		worst->size-=totalSize;
+		node_t *endWorst = worst+1;
+		header_t *headPtr = (header_t*)endWorst;
+		headPtr->size = totalSize-sizeof(header_t);
+		headPtr->magic = MAGIC;
+
+		return (headPtr+1);
+	}
+
 	return NULL;
 }
 
@@ -167,20 +284,25 @@ int psumeminit(int algo, int sizeOfRegion)
 {
 	// 1. Set a strategy flag for using either bestfit or worstfit
 	strat = algo;
-	int remain = (sizeOfRegion%getpagesize());
-	// TODO Is it ok that we add on the size of node_t for allocation?
-	int adjustedSize = remain*getpagesize() + sizeOfRegion-remain + sizeof(node_t);
 
-	if(sizeOfRegion == remain)
-	{
-		adjustedSize = sizeOfRegion + sizeof(node_t);
-	}
+	int adjustedSize = (sizeOfRegion<getpagesize())? getpagesize():(sizeOfRegion/getpagesize())*getpagesize();
+	adjustedSize += (sizeOfRegion%getpagesize())? getpagesize():0;
 
-	// TODO Add a check here for any signals thrown?
 	head = mmap(NULL, adjustedSize, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
 
 	head->size = adjustedSize-sizeof(node_t);
 	head->next = NULL;
 
 	return 0;
+}
+
+void printFreeList()
+{
+	printf("Printing Free List:\n");
+	node_t *current = head;
+	while(current)
+	{
+		printf("size:%d\n", current->size);
+		current = current->next;
+	}
 }
