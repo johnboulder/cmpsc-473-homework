@@ -1,5 +1,10 @@
+#pragma once
 #include <stdlib.h>
 #include "node.h"
+#include <assert.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <stdio.h>
 
 typedef struct __header_t
 {
@@ -20,3 +25,5 @@ void *bestFit(int size);
 void *worstFit(int size);
 
 void printFreeList();
+
+void printHeaderSize(void *ptr);
