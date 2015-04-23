@@ -67,7 +67,7 @@ int psufree(void* ptr)
 	// 3. Use the size information contained in the header block to set the size info in a node and place that node in the same position the header was in
 	// 4. Insert it at the head of the free list
 	// 5. Check if we can coelesce
-	printf("PSUFREE############################################################################\n");
+	//printf("PSUFREE############################################################################\n");
 	//printFreeList();
 
 	if(!ptr)
@@ -91,7 +91,7 @@ int psufree(void* ptr)
 		return -1;
 	}
 
-	printf("PTR in PSUFREE %p\n",ptr);
+	//printf("PTR in PSUFREE %p\n",ptr);
 	header_t *headPtr = (((header_t*)ptr)-1);
 	
 	// Check that the magic number is valid
@@ -184,8 +184,8 @@ void *bestFit(int size)
 {
 	node_t *current = head;
 	node_t *best = NULL;
-	printf("BESTFIT############################################################################\n");
-	printFreeList();
+	//printf("BESTFIT############################################################################\n");
+	//printFreeList();
 
 	// TODO fix our program such that we don't need to do this.
 	// We do this here because freeing memory requires that we have enough space to place a node_t
@@ -326,7 +326,7 @@ void *worstFit(int size)
 	}
 
 	int totalSize = size + sizeof(header_t);
-	printFreeList();
+	//printFreeList();
 	// While current->next is not NULL
 	while(current)
 	{

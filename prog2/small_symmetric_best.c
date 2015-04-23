@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include "psumemory.h"
 
 #define NUM 100
@@ -34,6 +35,8 @@ int main(){
     int size;
     int sizeOfRegion = 1 << 20;// 1MB
     int a = psumeminit(0, sizeOfRegion);
+    clock_t start, diff;
+    long double msec = 0, avg = 0;
     if (a == -1){
         fprintf(f, "Initialization failed!\n");
     }
@@ -45,7 +48,15 @@ int main(){
         for (int j = 0; j < NUM; ++j)
         {
             size = rand()%248 + 8;
+
+	    start = clock();
             test* a = (test*)psumalloc(size);
+	    diff = clock() - start;
+	    int cycles = CLOCKS_PER_SEC;
+	    msec = diff * 1000000/ cycles;
+	    avg += msec;
+	    printf("Time taken seconds %Lf\n", msec);
+
             write_test(a);
             read_test(a, f);
             if (a == NULL){
@@ -57,6 +68,8 @@ int main(){
             }
         }
         
+	printf("Average response time:%Lf\n", avg/NUM);
+
         for (int j = 0; j < NUM; ++j)
         {
             int a = psufree(pointer_array[j]);
