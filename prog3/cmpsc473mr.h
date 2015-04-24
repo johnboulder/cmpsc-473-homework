@@ -8,12 +8,12 @@
 typedef struct __node_t
 {
 	struct __node_t *next;
-	char *word;
+	char word[25];
 	int count;
 } node_t;
 
 // Returns a pointer to the second buffer that was made in this function. i.e. buffer_write
-node_t* mapper(int bMax, int reps, char *filename, int *thread_return_count, int rep);
+int mapper(int bMax, int reps, char *filename, int *thread_return_count, int rep, node_t** buffer_read, node_t** buffer_write);
 
 void reducer();
 

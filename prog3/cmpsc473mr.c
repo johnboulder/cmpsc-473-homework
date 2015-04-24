@@ -15,37 +15,42 @@
 
 #define STRMAX 25
 
-int brSize;
-int bwSize;
 int bufferSize;
 int replicas;
-int replica;
-int mapperDone;
+//int node_t** buffer_read;
+//int node_t** buffer_write;
 
-int push(node_t *node, node_t *head, int *size);
-int pushToBack(node_t *node, node_t *head, int *size);
-node_t *popHead(node_t *head, int *size);
-node_t *findMatch(node_t *head, char *wrd);
+int push(node_t *node, node_t **head, int *size);
+node_t *popHead(node_t **head, int *size);
+node_t *findMatch(node_t **head, char *word);
+void printlist(node_t **head);
 
 typedef struct __reader_arg_t
 {
 	char *filename;
-	node_t *buffer_read;
+	node_t **buffer_read;
 	pthread_mutex_t *lock;
 	pthread_cond_t *cond;
+	int replica;
+	int *mapperDone;
+	int *brSize;
 } reader_arg_t;
 
 typedef struct __adder_arg_t
 {
-	node_t *buffer_read;
-	node_t *buffer_write;
+	node_t **buffer_read;
+	node_t **buffer_write;
 	pthread_mutex_t *lock;
 	pthread_cond_t *cond;
 	int *thread_return_count;
+	int replica;
+	int *mapperDone;
+	int *brSize;
+	int bwSize;
 } adder_arg_t;
 
 // Returns a pointer to the second buffer that was made in this function. i.e. buffer_write
-node_t* mapper(int bMax, int reps, char *filename, int *thread_return_count, int rep)
+int mapper(int bMax, int reps, char *filename, int *thread_return_count, int rep, node_t **buffer_read, node_t **buffer_write)
 {
 	// 1. Initialize a lock pointer
 	pthread_mutex_t *lock = malloc(sizeof(pthread_mutex_t));
@@ -58,20 +63,30 @@ node_t* mapper(int bMax, int reps, char *filename, int *thread_return_count, int
 	assert(rc == 0);
 
 	// 2. Create a new node for buffer_read
-	node_t *buffer_read = malloc(sizeof(node_t));
-	brSize = 0;
+	//node_t *buffer_read = NULL;
+	//buffer_read = malloc(sizeof(node_t));
+	//buffer_read->next = NULL;
+	//buffer_read->count = 0;
+	//strncpy(buffer_read->word, "banana", STRMAX);
 
 	// 3. Create a new node for buffer_write
-	node_t *buffer_write = malloc(sizeof(node_t));
-	bwSize = 0;
+	//node_t *buffer_write = NULL;
+	//buffer_write = malloc(sizeof(node_t));
+	//buffer_write->next = NULL;
+	//buffer_write->count = 0;
+	//strncpy(buffer_write->word, "banana", STRMAX);
 
 	// Allocate an argument type for reader
 	adder_arg_t *adder_arg = malloc(sizeof(adder_arg_t));
 	
 	bufferSize = bMax;
 	replicas = reps;
-	replica = rep;
-	mapperDone = 0;
+
+	int *mapperFlag = malloc(sizeof(int));
+	*mapperFlag = 0;
+
+	int *bufferReadSize = malloc(sizeof(int));
+	*bufferReadSize = 0;
 
 	// Init adder_arg
 	adder_arg->buffer_read = buffer_read;
@@ -79,6 +94,10 @@ node_t* mapper(int bMax, int reps, char *filename, int *thread_return_count, int
 	adder_arg->lock = lock;
 	adder_arg->cond = cond;
 	adder_arg->thread_return_count = thread_return_count;
+	adder_arg->replica = rep;
+	adder_arg->mapperDone = mapperFlag;
+	adder_arg->brSize = bufferReadSize;
+	adder_arg->bwSize = 0;
 
 	// Allocate an argument type for adder
 	reader_arg_t *reader_arg = malloc(sizeof(reader_arg_t));
@@ -88,6 +107,9 @@ node_t* mapper(int bMax, int reps, char *filename, int *thread_return_count, int
 	reader_arg->buffer_read = buffer_read;
 	reader_arg->lock = lock;
 	reader_arg->cond = cond;
+	reader_arg->replica = rep;
+	reader_arg->mapperDone = mapperFlag;
+	reader_arg->brSize = bufferReadSize;
 
 	// 4. Spin a pthread for reader
 	pthread_t reader;
@@ -102,7 +124,7 @@ node_t* mapper(int bMax, int reps, char *filename, int *thread_return_count, int
 	printf("thread:%d adder created\n", rep);
 
 	// 6. Return the head to buffer_write for storage in the lists array
-	return buffer_write;
+	return 0;
 }
 
 void reducer()
@@ -115,6 +137,14 @@ void *map_reader(void *arg)
 {
 	reader_arg_t *reader = (reader_arg_t*)arg;
 	
+	// Init local variables
+	pthread_mutex_t *lock = reader->lock;
+	pthread_cond_t *cond = reader->cond;
+	node_t **buffer_read = reader->buffer_read;
+	int *brSize = reader->brSize;
+	int *mapperDone = reader->mapperDone;
+	int replica = reader->replica;
+	
 	char delimiters[2] = {'\n',' '};
 
 	// Create a new file pointer so the various threads don't mess with pointer positions
@@ -125,11 +155,6 @@ void *map_reader(void *arg)
 		printf("File failed to open\n");
 		return NULL;
 	}
-
-	pthread_mutex_t *lock = reader->lock;
-	pthread_cond_t *cond = reader->cond;
-	
-	node_t *buffer_read = reader->buffer_read;
 
 	// Find the size of the file
 	int rc = fseek(file, 0, SEEK_END);
@@ -142,8 +167,8 @@ void *map_reader(void *arg)
 	int readBytes = endByte - startByte;
 
 	// Create a dynamically sized array based on that length
-	char *readArray = malloc(readBytes);
-
+	char *readArray;
+	readArray = malloc(readBytes*sizeof(char));
 	// Use fseek to position the file pointer at the correct start position
 	rc = fseek(file, startByte, SEEK_SET);
 	assert(rc == 0);
@@ -154,7 +179,10 @@ void *map_reader(void *arg)
 
 	fclose(file);
 
-	char* word = strtok(readArray, delimiters);
+	char *word = malloc(STRMAX*sizeof(char));
+	strncpy(word, "banana", STRMAX);
+	
+	word = strtok_r(readArray, delimiters, &readArray);
 
 	// Part 2. Take strings and add them to buffer_read#############
 	// Loop until we've reached the end of the array
@@ -162,49 +190,63 @@ void *map_reader(void *arg)
 		// If not, we yield
 	while(word)
 	{
+		node_t *newNode = malloc(sizeof(node_t));
+		strncpy(newNode->word, word, STRMAX);
+		newNode->next = NULL;
+		newNode->count = 1;
+
+		pthread_mutex_lock(lock);
 		// Check if the buffer is too full
-		if(brSize>=bufferSize)
+		if(*brSize >= bufferSize)
 		{
 			printf("thread: %d reader waiting for buffer\n", replica);
 			// Buffer is too full, so we have to wait
 			rc = pthread_cond_wait(cond, lock);
 			assert(rc == 0);
+
+			printf("thread: %d reader continuing\n", replica);
 		}
-		
-		// Create a node for the first word
-		node_t *w = malloc(sizeof(node_t));
-		w->word = malloc(sizeof(char)*STRMAX);
-		strncpy(w->word, word, STRMAX);
-		w->count = 1;
-
-		//printf("word:%s in thread:%d \n", word, replica);
-
-		pthread_mutex_lock(lock);
 		// CRITICAL SECTION START****
-	
 		// Add word to buffer_read
-		push(w, buffer_read, &brSize);
+		printlist(buffer_read);
+
+		push(newNode, buffer_read, brSize);
+
+		printlist(buffer_read);
 	
 		// CRITICAL SECTION END******
 		pthread_mutex_unlock(lock);
 
 		// Signal that a node was added to the buffer
-		pthread_cond_signal(cond);
+		pthread_cond_broadcast(cond);
 
-		word = strtok(readArray, delimiters);
+		word = NULL;
+
+		word = strtok_r(readArray, delimiters, &readArray);
 	}
-	
+
+
+	pthread_mutex_lock(lock);
+	*mapperDone = 1;
+	while(*mapperDone == 1)
+	{
+		pthread_cond_wait(cond, lock);
+	}
+	pthread_mutex_unlock(lock);
 	// Deallocate anything we made in this function
 	// END OF map-reader: Free any memory that was associated with the arguments except the buffer_write pointer
-	free(buffer_read);
+	// Set readArray back to its original position before we free it
+	readArray-=readBytes;
+	free(*buffer_read);
 	free(file);
 	free(readArray);
 	free(arg);
+	free(word);
 
+	word = NULL;
 	arg = NULL;
 	file = NULL;
 	readArray = NULL;
-	mapperDone = 1;
 
 	// Signal that the mapper has finished everything just in case
 	pthread_cond_signal(cond);
@@ -216,150 +258,156 @@ void *map_reader(void *arg)
 void *map_adder(void *arg)
 {
 	adder_arg_t *adder = (adder_arg_t*)arg;
-	node_t *buffer_read = adder->buffer_read;
-	node_t *buffer_write = adder->buffer_write;
+	node_t **buffer_read = adder->buffer_read;
+	node_t **buffer_write = adder->buffer_write;
 	pthread_mutex_t *lock = adder->lock;
 	pthread_cond_t *cond = adder->cond;
 	int *thread_return_count = adder->thread_return_count;
+	int *brSize = adder->brSize;
+	int *mapperDone = adder->mapperDone;
+	int replica = adder->replica;
+	int bwSize = adder->bwSize;
+
+	char *word = malloc(STRMAX*sizeof(char));
+	strncpy(word, "banana", STRMAX);
 
 	// While mapper is not done, or while buffer_read has items
-	while(!mapperDone || brSize>0)
+	while(!(*mapperDone) || *brSize>0)
 	{
 		int rc = 0;
 		// TODO potential deadlock if mapper stops producing just after adder consumes last element in buffer_read
+		pthread_mutex_lock(lock);
 		// Check if the buffer is too full
-		if(brSize<0)
+		if(*brSize<=0)
 		{
 			printf("thread: %d adder waiting for buffer\n", replica);
 			// Nothing in the buffer to consume, so we have to wait
 			rc = pthread_cond_wait(cond, lock);
 			assert(rc == 0);
+			printf("thread: %d adder continuing\n", replica);
 		}
-		
-		pthread_mutex_lock(lock);
 		// CRITICAL SECTION START****
-		
-		// Pop the head of buffer_read
-		node_t *w = popHead(buffer_read, &brSize);
+		printlist(buffer_read);
 
+		// Pop the head of buffer_read
+		node_t* tempNode = popHead(buffer_read, brSize);
+
+		printlist(buffer_read);
 		// CRITICAL SECTION END******
 		pthread_mutex_unlock(lock);
 		
-		// The list is empty somehow and we reached the critical section in error
-		// Possibly due reader ending
-		if(!w)
-		{
-			// Continue to the next iteration of the loop
-			continue;
-		}
-
-		node_t *match = findMatch(buffer_write, w->word);
+		//TODO make sure this is actually returning a reference to a pointer
+		node_t *match = findMatch(buffer_write, tempNode->word);
 
 		// If a match is found 
-		if(match)
+		if(match != NULL)
 		{
 			// Increment the occurences of the match
 			match->count++;
 
 			// Destroy the old pointer since it already exists in buffer_write
-			free(w);
-			w = NULL;
+			free(tempNode);
+			tempNode = NULL;
 		}
 		// buffer_write is either empty, or a match was not found
 		else
 		{
 			// Add the node to buffer_write
-			push(w, buffer_write, &bwSize);
+			push(tempNode, buffer_write, &bwSize);
 		}
+		pthread_cond_broadcast(cond);
 	}
 
+	pthread_mutex_lock(lock);
+	if(*mapperDone == 1)
+	{
+		*mapperDone = 0;
+	}
+	pthread_mutex_unlock(lock);
+
+	pthread_cond_broadcast(cond);
 	// END OF map-adder: Free any memory that was associated with the arguments except the buffer_write pointer
-	free(buffer_read);
 	free(arg);
+	free(word);
 	pthread_mutex_destroy(lock);
 	pthread_cond_destroy(cond);
-	buffer_read = NULL;
+	
 	arg = NULL;
 	lock = NULL;
 	cond = NULL;
-
-	*thread_return_count++;
+	word = NULL;
+	++(*thread_return_count);
 
 	return NULL;
 }
 
 
 // Adds a node to the head of the list
-int push(node_t *node, node_t *head, int *size)
+int push(node_t* node, node_t **head, int *size)
 {
-	node->next = head;
-	head = node;
-	*size++;
-	return 0;
-}
-
-// Adds a node to the very back of the list
-int pushToBack(node_t *node, node_t *head, int *size)
-{
-	node_t *current = head;
-	node_t *prev = NULL;
+	if(!(node))
+	{
+		return -1;
+	}
 	
-	while(current)
-	{
-		prev = current;
-		current = current->next;
-	}
+	node->next = *head;
+	*head = node;
+	++(*size);
 
-	if(prev)
-	{
-		prev->next = node;
-	}
-	else
-	{
-		push(node, head, size);
-	}
-
-	*size++;
 	return 0;
 }
 
 // Removes a node from the head of the list
-node_t *popHead(node_t *head, int *size)
+node_t *popHead(node_t **head, int *size)
 {
-	if(head)
+	if((*head))
 	{
-		node_t *node = head;
-		head = head->next;
-		*size--;
-		return node;
+		node_t *temp = (*head);
+		*head = temp->next;
+		temp->next = NULL;
+
+		--(*size);
+		return temp;
 	}
 	else
 		return NULL;
 }
 
 // Finds a node in the list with a word member that matches wrd
-node_t *findMatch(node_t *head, char *wrd)
+node_t *findMatch(node_t **head, char *word)
 {
-	if(!head)
+	if(!(*head))
 		return NULL;
 
-	if(!wrd)
+	if(!word)
 	{
 		return NULL;
 	}
 
-	node_t *current = head;
+	node_t *current = (*head);
 
 	while(current)
 	{
-		if(strcmp(current->word, wrd) == 0)
+		if(strcmp(current->word, word) == 0)
 		{
 			return current;
 		}
-
 		current = current->next;
 	}
 
 	// string not found
 	return NULL;
+}
+
+void printlist(node_t **head)
+{
+	printf("\n\n**********\n");
+	node_t *current = *head;
+
+	while(current)
+	{
+		printf("word: %s\n", current->word);
+		current = current->next;
+	}
+	printf("**********\n\n");
 }

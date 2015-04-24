@@ -5,18 +5,29 @@
 
 int main()
 {
-	int replicas = 5;
+	int replicas = 1;
 	int bufferSize = 5;
 	int *threads_returned = malloc(sizeof(int));
 	*threads_returned = 0;
 
-	node_t** buffer_adder_array = malloc(sizeof(node_t*)*replicas);
+	node_t** buffer_adder_array;
+	buffer_adder_array = malloc(sizeof(node_t*)*replicas);
+	
+	node_t** buffer_reader_array;
+	buffer_reader_array = malloc(sizeof(node_t*)*replicas);
+
+	for(int i = 0; i<replicas; i++)
+	{
+		buffer_adder_array[i] = NULL;
+	}
 
 	for(int i=1; i<=replicas; i++)
 	{
-		buffer_adder_array[i] = malloc(sizeof(node_t));
-		buffer_adder_array[i] = mapper(bufferSize, replicas, "input1.txt", threads_returned, i);
-		printf("mapper:%d called\n", i);
+
+		buffer_adder_array[i-1] = NULL;
+		buffer_reader_array[i-1] = NULL;
+		mapper(bufferSize, replicas, "input1.txt", threads_returned, i, &buffer_reader_array[i-1], &buffer_adder_array[i-1]);
+		printf("mapper: %d called\n", i);
 	}
 
 	printf("For loop finished.\n");
@@ -37,8 +48,6 @@ int main()
 			current = current->next;
 
 			prev->next = NULL;
-			free(prev->word);
-			prev->word = NULL;
 			free(prev);
 			prev = NULL;
 		}
@@ -46,7 +55,10 @@ int main()
 
 	free(buffer_adder_array);
 
-	buffer_adder_array = NULL;
+	for(int i = 0; i<replicas; i++)
+	{
+		buffer_adder_array[i] = NULL;
+	}
 
 	return 0;
 }
