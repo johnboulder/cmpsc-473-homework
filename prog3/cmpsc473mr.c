@@ -441,6 +441,7 @@ node_t *popHead(node_t **head, int *size)
 		//printf("word: %s\n", temp->word);
 		return temp;
 	}
+
 	else
 		return NULL;
 }

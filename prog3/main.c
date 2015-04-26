@@ -6,7 +6,7 @@
 int main()
 {
 	int replicas = 10;
-	int bufferSize = 10;
+	int bufferSize = 100;
 	int *threads_returned = malloc(sizeof(int));
 	*threads_returned = 0;
 
@@ -56,6 +56,27 @@ int main()
 		}
 	}
 
+	for(int i=0; i<replicas; i++)
+	{
+		node_t* current = buffer_reader_array[i];
+		node_t* prev = NULL;
+		while(current)
+		{
+			prev = current;
+			current = current->next;
+
+			prev->next = NULL;
+			free(prev);
+			prev = NULL;
+		}
+	}
+
+	for(int i =0; i<replicas; i++)
+	{
+		free(bw_size_array[i]);
+	}
+
+	free(bw_size_array);
 	free(buffer_adder_array);
 	free(buffer_reader_array);
 	
