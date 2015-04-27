@@ -12,10 +12,9 @@ typedef struct __node_t
 	int count;
 } node_t;
 
-// Returns a pointer to the second buffer that was made in this function. i.e. buffer_write
-int mapper(int bMax, int reps, char *filename, int *thread_return_count, int rep, node_t** buffer_read, node_t** buffer_write, int *bwSize);
+int mapper(char *filename, int rep);
 
-void reducer(node_t** bufferList, node_t** finalList, int replicas, int **bw_size_array);
+void reducer();
 
 // 
 void *map_reader(void *arg);
