@@ -80,10 +80,6 @@ int main(int argc, void *argv[])
 		return -1;
 	}
 
-	double timings[20];
-
-	for(int j = 0; j<20; j++)
-	{
 	threads_returned = malloc(sizeof(int));
 	*threads_returned = 0;
 	finalList = NULL;
@@ -92,9 +88,6 @@ int main(int argc, void *argv[])
 	bw_size_array = malloc(sizeof(int*)*replicas);
 	buffer_adder_array = malloc(sizeof(node_t*)*replicas);
 	buffer_reader_array = malloc(sizeof(node_t*)*replicas);
-
-
-	begin = clock();
 
 	for(int i=1; i<=replicas; i++)
 	{
@@ -105,7 +98,6 @@ int main(int argc, void *argv[])
 		br_size_array[i-1] = malloc(sizeof(int));
 		*(br_size_array[i-1]) = 0;
 
-		//int mapper(char *filename, int rep);
 		mapper(filename, i);
 	}
 
@@ -113,13 +105,6 @@ int main(int argc, void *argv[])
 
 	reducer();
 
-	end = clock();
-	time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-
-	printf("replicas:%d buffer Size:%d time:%F\n", replicas, bufferMaxSize, time_spent);
-
-	timings[j] = time_spent;
-	//printf("%d\n",*flSize);
 	for(int i = 0; i<replicas; i++)
 	{
 		free(bw_size_array[i]);
@@ -143,35 +128,6 @@ int main(int argc, void *argv[])
 	free(buffer_reader_array);
 	free(threads_returned);
 	free(flSize);
-
-	}
-
-	// sort it
-	for(int i = 0; i<20; i++)
-	{
-		double minVal = timings[i];
-		int minInd = i;
-		for(int k = i; k<20; k++)
-		{
-			if(timings[k]<minVal)
-			{
-				minInd = k;
-				minVal = timings[k];
-			}
-		}
-		timings[minInd] = timings[i];
-		timings[i] = minVal;
-	}
-
-	double total = 0;
-	for(int i = 0; i<20; i++)
-	{
-		total+= timings[i];
-	}
-	double average = total/20;
-	double seventyFifth = timings[14];
-	double twentyFifth = timings[4];
-	printf("average: %F, seventyFifth: %F, twentyFifth: %F\n\n", average, seventyFifth, twentyFifth);
 
 	return 0;
 }
@@ -302,18 +258,7 @@ void reducer()
 		}
 
 	}
-
 	
-	/*node_t *current = finalList;
-	int j = 0;
-	while(current)
-	{
-		printf("word: %s count: %d entry:%d \n", current->word, current->count, j);
-		current = current->next;
-		j++;
-	}
-
-	return;*/
 }
 
 // 
