@@ -56,10 +56,34 @@ node_t *finalList;
 int *flSize;
 
 
-int main()
+int main(int argc, void *argv[])
 {
-	replicas = 10;
-	bufferMaxSize = 100;
+	clock_t begin, end;
+	double time_spent;
+	char *filename;
+
+	if( argc == 4 )
+	{
+		filename = (char*)argv[1];
+		replicas = atoi(argv[2]);
+		bufferMaxSize = atoi(argv[3]);
+	}
+	else if( argc > 4 )
+	{
+		printf("Too many arguments. \n");
+		return -1;
+	}
+	else
+	{
+		printf("Three arguments expected.\n");
+		printf("[filename] [replicas] [buffer size]\n");
+		return -1;
+	}
+
+	double timings[20];
+
+	for(int j = 0; j<20; j++)
+	{
 	threads_returned = malloc(sizeof(int));
 	*threads_returned = 0;
 	finalList = NULL;
@@ -69,6 +93,8 @@ int main()
 	buffer_adder_array = malloc(sizeof(node_t*)*replicas);
 	buffer_reader_array = malloc(sizeof(node_t*)*replicas);
 
+
+	begin = clock();
 
 	for(int i=1; i<=replicas; i++)
 	{
@@ -80,13 +106,20 @@ int main()
 		*(br_size_array[i-1]) = 0;
 
 		//int mapper(char *filename, int rep);
-		mapper("input3.txt", i);
+		mapper(filename, i);
 	}
 
 	while(*threads_returned<replicas);
 
 	reducer();
 
+	end = clock();
+	time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+
+	printf("replicas:%d buffer Size:%d time:%F\n", replicas, bufferMaxSize, time_spent);
+
+	timings[j] = time_spent;
+	//printf("%d\n",*flSize);
 	for(int i = 0; i<replicas; i++)
 	{
 		free(bw_size_array[i]);
@@ -110,6 +143,35 @@ int main()
 	free(buffer_reader_array);
 	free(threads_returned);
 	free(flSize);
+
+	}
+
+	// sort it
+	for(int i = 0; i<20; i++)
+	{
+		double minVal = timings[i];
+		int minInd = i;
+		for(int k = i; k<20; k++)
+		{
+			if(timings[k]<minVal)
+			{
+				minInd = k;
+				minVal = timings[k];
+			}
+		}
+		timings[minInd] = timings[i];
+		timings[i] = minVal;
+	}
+
+	double total = 0;
+	for(int i = 0; i<20; i++)
+	{
+		total+= timings[i];
+	}
+	double average = total/20;
+	double seventyFifth = timings[14];
+	double twentyFifth = timings[4];
+	printf("average: %F, seventyFifth: %F, twentyFifth: %F\n\n", average, seventyFifth, twentyFifth);
 
 	return 0;
 }
@@ -153,13 +215,13 @@ int mapper(char *filename, int rep)
 	pthread_t reader;
 	rc = pthread_create(&reader, NULL, &map_reader, ((void*)reader_arg));
 	assert(rc == 0);
-	printf("thread:%d reader created\n", rep);
+	//printf("thread:%d reader created\n", rep);
 
 	// 5. Spin a pthread for adder
 	pthread_t adder;
 	rc = pthread_create(&adder, NULL, &map_adder, ((void*)adder_arg));
 	assert(rc == 0);
-	printf("thread:%d adder created\n", rep);
+	//printf("thread:%d adder created\n", rep);
 
 	// 6. Return the head to buffer_write for storage in the lists array
 	return 0;
@@ -167,17 +229,6 @@ int mapper(char *filename, int rep)
 
 void reducer()
 {
-	/*for(int i = 0; i<replicas; i++)
-	{
-		node_t *current = buffer_adder_array[i];
-		int j = 0;
-		while(current)
-		{
-			printf("thread: %d word: %s count: %d entry:%d \n", i, current->word, current->count, j);
-			current = current->next;
-			j++;
-		}
-	}*/
 
 	flSize = malloc(sizeof(int));
 	*flSize = 0;
@@ -252,7 +303,17 @@ void reducer()
 
 	}
 
-	return;
+	
+	/*node_t *current = finalList;
+	int j = 0;
+	while(current)
+	{
+		printf("word: %s count: %d entry:%d \n", current->word, current->count, j);
+		current = current->next;
+		j++;
+	}
+
+	return;*/
 }
 
 // 
@@ -335,7 +396,10 @@ void *map_reader(void *arg)
 
 	//readArray-=readBytes;
 	// Notify that mapper is done
+	pthread_mutex_lock(lock);
 	*mapperDone = 1;
+	pthread_mutex_unlock(lock);
+	pthread_cond_signal(cond);
 	// Free stuff
 	free(pointerToFree);
 	//free(word);
@@ -362,6 +426,7 @@ void *map_adder(void *arg)
 	// While mapper is not done, or while buffer_read has items
 	while(!(*mapperDone) || *brSize>0)
 	{
+		//pthread_mutex_unlock(lock);
 		int rc = 0;
 		pthread_mutex_lock(lock);
 		if(*brSize<=0)
@@ -397,6 +462,9 @@ void *map_adder(void *arg)
 
 		// Alert other threads to the fact that there's now an open space in buffer_read
 		pthread_cond_signal(cond);
+
+		// Lock to check the mapperDone value along with brSize
+		//pthread_mutex_lock(lock);
 	}
 	// When finished
 	// Increment thread return count
