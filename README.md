@@ -3,9 +3,9 @@
 ### What is this repository for? ###
 
 * CMPSC473 Spring 2015 - This code represents the homework assignments that were given to us over the course of this class. They include some documentation in each implementation
-Assignment 1 - CPU scheduler within a user-level threads package
-Assignment 2 - Design a user-space memory allocator - simple rewrite of malloc
-Assignment 3 - a toy mapreduce-like parallel program for word counting
+* Assignment 1 - CPU scheduler within a user-level threads package
+* Assignment 2 - Design a user-space memory allocator - simple rewrite of malloc
+* Assignment 3 - a toy mapreduce-like parallel program for word counting
 
 ### How do I get set up? ###
 
