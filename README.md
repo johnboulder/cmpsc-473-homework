@@ -13,7 +13,7 @@
 
 ### Contribution guidelines ###
 
-* Don't copy this code for your use in any class assignments. If you do you're a shitty programmer and don't deserve a degree. I worked hard to learn and understand how to program these things and I justly rewarded.
+* Don't copy this code for your use in any class assignments. If you do you're a shitty programmer and don't deserve a degree. I worked hard to learn and understand how to program these assignments and to accomplish it any other way is equivalent to resigning yourself to failure.
 
 ### Who do I talk to? ###
 
